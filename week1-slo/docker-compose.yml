@@ -1,0 +1,13 @@
+# Week 1 demo app. Prometheus + Grafana get added in Day 2.
+services:
+  app:
+    build: ./app
+    image: week1-demo:latest
+    container_name: week1-demo
+    ports:
+      - "8080:8080"
+    environment:
+      # Day 6 fault injection — keep these at 0 until then.
+      FAIL_RATE: "0"
+      LATENCY_MS: "0"
+    restart: unless-stopped
