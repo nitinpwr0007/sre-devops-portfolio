@@ -10,6 +10,7 @@ burn-rate alert on top of it — all locally with Docker.
 | `docker-compose.yml` | Runs app + Prometheus + Grafana |
 | `prometheus/prometheus.yml` | **Day 2** — scrape config (pulls `app:8080/metrics` every 5s) |
 | `grafana/provisioning/` | **Day 2** — auto-provisions the Prometheus datasource |
+| `grafana/dashboards/week1-slo.json` | **Day 3** — SLO dashboard (availability panel) as code |
 | `SLI.md` | **Day 1** — the 2 SLIs defined for this app (availability, latency-p95) |
 
 ## The app
@@ -48,6 +49,7 @@ already wired up (no setup needed).
 ## Progress
 - [x] **D1** — app running in Docker + 2 SLIs defined (`SLI.md`)
 - [x] **D2** — Prometheus scraping the app + Grafana with datasource provisioned
+- [x] **D3** — availability SLI as PromQL + live Grafana panel (`Week 1 · SLO Dashboard`)
 - [ ] D3 — availability SLI panel
 - [ ] D4 — latency SLI panel
 - [ ] D5 — SLO + error budget + burn-rate alert

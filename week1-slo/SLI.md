@@ -19,10 +19,13 @@ Below are the 2 SLIs for this app, tied to the exact metrics it already exposes 
 - **PromQL (built for real in Day 3):**
 
   ```promql
-  sum(rate(http_requests_total{status!~"5..", endpoint!="/healthz"}[5m]))
+  sum(rate(http_requests_total{status!~"5..", endpoint!~"/healthz|/metrics"}[5m]))
   /
-  sum(rate(http_requests_total{endpoint!="/healthz"}[5m]))
+  sum(rate(http_requests_total{endpoint!~"/healthz|/metrics"}[5m]))
   ```
+
+  > ✅ **Day 3 done** — this is now a live Grafana panel ("Availability SLI") on the
+  > *Week 1 · SLO Dashboard*, provisioned from `grafana/dashboards/week1-slo.json`.
 
 - **Why 5xx (not 4xx):** a `400/404` is usually the *client's* fault, not the service failing.
   Counting 4xx as "bad" would punish us for user errors. We only count `5xx` as unavailability.

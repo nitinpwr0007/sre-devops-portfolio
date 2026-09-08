@@ -5,6 +5,7 @@ apiVersion: 1
 datasources:
   - name: Prometheus
     type: prometheus
+    uid: prometheus          # fixed uid so dashboards can reference it reliably
     access: proxy
     # "prometheus" = compose service name; Grafana talks to it over the compose network.
     url: http://prometheus:9090

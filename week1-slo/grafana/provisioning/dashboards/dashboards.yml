@@ -1,0 +1,13 @@
+# Tell Grafana to load dashboard JSON files from a folder on disk (GitOps-style).
+apiVersion: 1
+
+providers:
+  - name: week1-slo
+    orgId: 1
+    folder: "Week 1 - SLO"
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/dashboards
