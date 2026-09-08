@@ -1,4 +1,7 @@
-# Week 1 demo app. Prometheus + Grafana get added in Day 2.
+# Week 1 demo stack.
+#   app        — the instrumented Flask service (Day 1)
+#   prometheus — scrapes app:8080/metrics and stores the time series (Day 2)
+#   grafana    — dashboards on top of Prometheus (Day 2), datasource auto-provisioned
 services:
   app:
     build: ./app
@@ -11,3 +14,42 @@ services:
       FAIL_RATE: "0"
       LATENCY_MS: "0"
     restart: unless-stopped
+    networks: [monitoring]
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: week1-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=7d"
+    restart: unless-stopped
+    networks: [monitoring]
+    depends_on: [app]
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: week1-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin      # lab only — never do this in prod
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    restart: unless-stopped
+    networks: [monitoring]
+    depends_on: [prometheus]
+
+networks:
+  monitoring:
+
+volumes:
+  prometheus-data:
+  grafana-data:

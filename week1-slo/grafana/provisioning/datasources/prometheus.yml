@@ -1,0 +1,12 @@
+# Auto-provision the Prometheus datasource so Grafana has it on first boot
+# (no clicking in the UI). Grafana reads this folder at startup.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    # "prometheus" = compose service name; Grafana talks to it over the compose network.
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true

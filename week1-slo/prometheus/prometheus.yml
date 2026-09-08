@@ -1,0 +1,17 @@
+# Day 2 — Prometheus scrape config
+# Prometheus pulls /metrics from each target on an interval and stores it as time series.
+global:
+  scrape_interval: 5s      # how often to pull metrics (fast, so panels react quickly in a lab)
+  evaluation_interval: 5s  # how often alerting/recording rules run (used from Day 5)
+
+scrape_configs:
+  # Scrape our demo app. "app" is the compose service name → Docker DNS resolves it.
+  - job_name: week1-demo
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["app:8080"]
+
+  # Scrape Prometheus itself (handy sanity check that scraping works at all).
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
