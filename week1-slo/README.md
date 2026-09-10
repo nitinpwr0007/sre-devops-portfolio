@@ -50,6 +50,7 @@ already wired up (no setup needed).
 - [x] **D1** — app running in Docker + 2 SLIs defined (`SLI.md`)
 - [x] **D2** — Prometheus scraping the app + Grafana with datasource provisioned
 - [x] **D3** — availability SLI as PromQL + live Grafana panel (`Week 1 · SLO Dashboard`)
+- [x] **D4** — latency SLI as PromQL (histogram p50/p95/p99) + live Grafana panels
 - [ ] D3 — availability SLI panel
 - [ ] D4 — latency SLI panel
 - [ ] D5 — SLO + error budget + burn-rate alert

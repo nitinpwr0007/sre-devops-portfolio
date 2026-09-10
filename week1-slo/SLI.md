@@ -51,6 +51,8 @@ Below are the 2 SLIs for this app, tied to the exact metrics it already exposes 
   )
   ```
 
+  > ✅ **Day 4 done** — p50/p95/p99 are now live panels on the *Week 1 · SLO Dashboard*.
+
 - **Why p95, not average:** averages hide the slow tail. If 5% of users wait 3s while the
   average looks fine, those users still suffer. Percentiles expose the tail that users feel.
 
