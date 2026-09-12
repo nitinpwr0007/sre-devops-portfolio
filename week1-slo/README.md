@@ -51,9 +51,7 @@ already wired up (no setup needed).
 - [x] **D2** — Prometheus scraping the app + Grafana with datasource provisioned
 - [x] **D3** — availability SLI as PromQL + live Grafana panel (`Week 1 · SLO Dashboard`)
 - [x] **D4** — latency SLI as PromQL (histogram p50/p95/p99) + live Grafana panels
-- [ ] D3 — availability SLI panel
-- [ ] D4 — latency SLI panel
-- [ ] D5 — SLO + error budget + burn-rate alert
+- [x] **D5** — 99.9% SLO + error budget/downtime table (`SLO.md`) + multi-window burn-rate alerts (`prometheus/rules/`)
 - [ ] D6 — break the app, watch the budget burn
 - [ ] D7 — write-up + capstone
 

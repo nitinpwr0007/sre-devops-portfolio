@@ -4,6 +4,10 @@ global:
   scrape_interval: 5s      # how often to pull metrics (fast, so panels react quickly in a lab)
   evaluation_interval: 5s  # how often alerting/recording rules run (used from Day 5)
 
+# Day 5 — load SLO recording + burn-rate alerting rules.
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
 scrape_configs:
   # Scrape our demo app. "app" is the compose service name → Docker DNS resolves it.
   - job_name: week1-demo
