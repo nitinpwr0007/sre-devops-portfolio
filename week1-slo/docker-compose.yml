@@ -10,9 +10,9 @@ services:
     ports:
       - "8080:8080"
     environment:
-      # Day 6 fault injection — keep these at 0 until then.
-      FAIL_RATE: "0"
-      LATENCY_MS: "0"
+      # Day 6 fault injection — toggle from the shell, e.g. FAIL_RATE=0.6 docker compose up -d app
+      FAIL_RATE: "${FAIL_RATE:-0}"
+      LATENCY_MS: "${LATENCY_MS:-0}"
     restart: unless-stopped
     networks: [monitoring]
 
