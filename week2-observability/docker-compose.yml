@@ -1,0 +1,67 @@
+# Week 2 observability stack — Day 1: logs → Loki.
+#   app      — Flask service emitting ONE JSON log line per request (stdout)
+#   loki     — log store, queried with LogQL
+#   promtail — discovers containers via Docker API, ships stdout → Loki
+#   grafana  — Explore view for LogQL (Loki datasource auto-provisioned)
+#
+# Ports are offset from Week 1 (app 8081, grafana 3001) so both stacks can run together.
+services:
+  app:
+    build: ./app
+    image: week2-demo:latest
+    container_name: week2-demo
+    ports:
+      - "8081:8080"
+    environment:
+      FAIL_RATE: "${FAIL_RATE:-0}"
+      LATENCY_MS: "${LATENCY_MS:-0}"
+    restart: unless-stopped
+    networks: [obs]
+
+  loki:
+    image: grafana/loki:3.1.1
+    container_name: week2-loki
+    command: ["-config.file=/etc/loki/loki-config.yml"]
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki-data:/loki
+    restart: unless-stopped
+    networks: [obs]
+
+  promtail:
+    image: grafana/promtail:3.1.1
+    container_name: week2-promtail
+    command: ["-config.file=/etc/promtail/promtail-config.yml"]
+    volumes:
+      - ./promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+    depends_on: [loki]
+    networks: [obs]
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: week2-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin      # lab only
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"       # lab convenience: browse without login
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    restart: unless-stopped
+    depends_on: [loki]
+    networks: [obs]
+
+networks:
+  obs:
+
+volumes:
+  loki-data:
+  grafana-data:

@@ -1,0 +1,28 @@
+# Promtail — discovers containers via the Docker API and ships their stdout to Loki.
+# Key lesson: we attach only LOW-cardinality labels (container, stream, job).
+# Everything else (request_id, duration_ms, ...) stays in the JSON line and is
+# parsed at query time with `| json` in LogQL.
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      # /week2-demo -> container="week2-demo"
+      - source_labels: ["__meta_docker_container_name"]
+        regex: "/(.*)"
+        target_label: container
+      - source_labels: ["__meta_docker_container_log_stream"]
+        target_label: stream
+      - target_label: job
+        replacement: docker
