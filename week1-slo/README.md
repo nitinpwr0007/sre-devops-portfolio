@@ -53,5 +53,5 @@ already wired up (no setup needed).
 - [x] **D4** — latency SLI as PromQL (histogram p50/p95/p99) + live Grafana panels
 - [x] **D5** — 99.9% SLO + error budget/downtime table (`SLO.md`) + multi-window burn-rate alerts (`prometheus/rules/`)
 - [x] **D6** — fault injection (`FAIL_RATE=0.6 docker compose up -d app`) → watched `ErrorBudgetBurnFast` go pending→firing→clear
-- [ ] D7 — write-up + capstone
+- [x] **D7** — capstone write-up (`CAPSTONE.md`): SLI vs SLO vs error budget, grounded in this lab
 
