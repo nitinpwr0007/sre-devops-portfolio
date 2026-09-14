@@ -156,12 +156,36 @@ curl -s -G 'http://localhost:9009/prometheus/api/v1/query_exemplars' \
 3. **Explore → Mimir**: graph `histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))`,
    enable **Exemplars** → click a ◇ dot → opens the slow request's trace.
 
+## Day 5 — RED + USE dashboards
+
+Two auto-provisioned dashboards (folder **Week2 LGTM** in Grafana), the two canonical SRE lenses:
+
+| Method | Question | Signals | Best for |
+|---|---|---|---|
+| **RED** | *Is this **service** healthy?* | **R**ate, **E**rrors, **D**uration | request-driven things (APIs, endpoints) |
+| **USE** | *Is this **resource** in trouble?* | **U**tilization, **S**aturation, **E**rrors | machines/queues/pools (CPU, mem, FDs, disk) |
+
+- **RED** — [grafana/dashboards/red.json](grafana/dashboards/red.json): req/s by endpoint, 5xx ratio
+  stat + 5xx by endpoint, and p50/p95/p99 latency **with exemplars** (click a ◇ → the trace).
+- **USE** — [grafana/dashboards/use.json](grafana/dashboards/use.json): CPU cores + RSS (utilization),
+  open-FD gauge + count (saturation), 5xx rate (errors). Built from the app's own `process_*`
+  metrics; **in production USE comes from node-exporter / cAdvisor / kubelet**, not the app.
+
+Provisioned via [grafana/provisioning/dashboards/dashboards.yml](grafana/provisioning/dashboards/dashboards.yml)
+— drop a JSON in `grafana/dashboards/` and it loads on start (no manual import). Open Grafana →
+**Dashboards → Week2 LGTM**.
+
+### Rule of thumb
+- Alert on **RED** (symptoms users feel: slow, failing) — these map to your **SLOs**.
+- Diagnose with **USE** (causes: a saturated resource). RED tells you *something's wrong*; USE tells you *which resource*.
+
 ## Progress
 - [x] **D1** — structured JSON logging → Loki, queried with LogQL; labels-vs-cardinality understood
 - [x] **D2** — metrics → Mimir via Prometheus `remote_write`; PromQL from Mimir; why Mimir > raw Prometheus
 - [x] **D3** — traces → Tempo via OpenTelemetry + OTel Collector; TraceQL; why a collector sits in the middle
 - [x] **D4** — correlate trace ↔ logs ↔ metric (derivedFields, tracesToLogs/Metrics, exemplars)
-- [ ] D5 — RED + USE dashboards
+- [x] **D5** — RED + USE dashboards (auto-provisioned); when to use each; alert-on-RED, diagnose-with-USE
+- [ ] D6 — multi-tenancy (X-Scope-OrgID) + retention/limits
 - [ ] D4 — correlate trace → logs → metric (exemplars)
 - [ ] D5 — RED + USE dashboards
 - [ ] D6 — multi-tenancy (X-Scope-OrgID) + retention/limits

@@ -1,0 +1,14 @@
+apiVersion: 1
+
+# Auto-load the RED + USE dashboards from JSON files (Day 5).
+providers:
+  - name: lab-dashboards
+    orgId: 1
+    folder: Week2 LGTM
+    type: file
+    disableDeletion: false
+    editable: true
+    updateIntervalSeconds: 10
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false
