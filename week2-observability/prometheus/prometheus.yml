@@ -1,0 +1,24 @@
+# Week 2 Day 2 — Prometheus as a scraper + remote_write shipper.
+# Prometheus scrapes the app, then forwards every sample to Mimir for long-term,
+# multi-tenant storage. Grafana queries Mimir (not this Prometheus) for dashboards.
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+  external_labels:
+    cluster: week2-lab       # identifies the source Prometheus in Mimir
+
+scrape_configs:
+  - job_name: week2-app
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["app:8080"]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+# Ship all scraped samples to Mimir's push endpoint.
+remote_write:
+  - url: http://mimir:9009/api/v1/push
+    # With multitenancy off, Mimir files these under the 'anonymous' tenant.
+    # Day 6 will add: headers: { X-Scope-OrgID: <tenant> }

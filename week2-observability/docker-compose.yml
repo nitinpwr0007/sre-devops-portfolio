@@ -30,6 +30,32 @@ services:
     restart: unless-stopped
     networks: [obs]
 
+  mimir:
+    image: grafana/mimir:2.13.0
+    container_name: week2-mimir
+    command: ["-config.file=/etc/mimir/mimir.yaml"]
+    ports:
+      - "9009:9009"
+    volumes:
+      - ./mimir/mimir.yaml:/etc/mimir/mimir.yaml:ro
+      - mimir-data:/data
+    restart: unless-stopped
+    networks: [obs]
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: week2-prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--enable-feature=exemplar-storage"
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    restart: unless-stopped
+    depends_on: [mimir]
+    networks: [obs]
+
   promtail:
     image: grafana/promtail:3.1.1
     container_name: week2-promtail
@@ -64,4 +90,5 @@ networks:
 
 volumes:
   loki-data:
+  mimir-data:
   grafana-data:

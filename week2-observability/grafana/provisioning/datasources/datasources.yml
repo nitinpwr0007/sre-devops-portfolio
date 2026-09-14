@@ -9,3 +9,12 @@ datasources:
     jsonData:
       # Day 4 will use this to jump trace <-> logs; harmless now.
       maxLines: 1000
+
+  - name: Mimir
+    type: prometheus
+    access: proxy
+    uid: mimir
+    url: http://mimir:9009/prometheus
+    jsonData:
+      httpMethod: POST
+      prometheusType: Mimir

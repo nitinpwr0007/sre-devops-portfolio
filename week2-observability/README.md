@@ -1,15 +1,17 @@
 # Week 2 — Observability Deep-Dive (LGTM stack)
 
 Mirrors the stack you run at NICE: **L**oki (logs), **G**rafana, **T**empo (traces), **M**imir (metrics).
-This week builds it up pillar by pillar. **Day 1 = logs → Loki + LogQL.**
+This week builds it up pillar by pillar. **Day 1 = logs → Loki. Day 2 = metrics → Mimir.**
 
-## Stack (Day 1)
+## Stack
 | Service | Port | Purpose |
 |---|---|---|
-| app | http://localhost:8081 | Flask app, one **JSON log line per request** to stdout |
+| app | http://localhost:8081 | Flask app: **JSON logs** to stdout + Prometheus **/metrics** |
 | Loki | http://localhost:3100 | log store, queried with LogQL |
 | Promtail | (internal) | discovers containers via Docker API → ships stdout to Loki |
-| Grafana | http://localhost:3001 | Explore view for LogQL (anonymous Admin, no login needed) |
+| Prometheus | http://localhost:9091 | scrapes app metrics, `remote_write`s to Mimir (Day 2) |
+| Mimir | http://localhost:9009 | long-term, multi-tenant metric store (Day 2) |
+| Grafana | http://localhost:3001 | Explore for LogQL + PromQL (anonymous Admin, no login needed) |
 
 ## Run
 ```bash
@@ -46,9 +48,48 @@ sum(count_over_time({container="week2-demo"} | json | status >= 500 [1m]))
 Promtail here sets only 3 labels; the app puts `request_id`, `duration_ms`, `remote_addr`,
 `method`, `endpoint`, `status` *inside* the JSON line.
 
+## Day 2 — metrics → Mimir (Prometheus `remote_write`)
+
+| Service | Port | Purpose |
+|---|---|---|
+| Prometheus | http://localhost:9091 | scrapes `app:8080/metrics` every 5s, **`remote_write`s to Mimir** |
+| Mimir | http://localhost:9009 | long-term, horizontally-scalable, multi-tenant metric store |
+| Grafana | http://localhost:3001 | **Mimir** datasource → PromQL dashboards |
+
+The flow: `app /metrics` → **Prometheus scrape** → **`remote_write`** → **Mimir** → **Grafana (PromQL)**.
+Prometheus is just the *collector/shipper* here; Mimir is the *system of record*.
+
+### Why Mimir instead of plain Prometheus?
+- **Durable long-term storage** — Prometheus local TSDB is short-retention and node-bound;
+  Mimir writes blocks to object storage (S3/GCS; filesystem in this lab) for months/years.
+- **Horizontal scale + HA** — Mimir splits distributor/ingester/querier/compactor/store-gateway,
+  so ingest and query scale out; a single Prometheus can't.
+- **Native multi-tenancy** — every write/read is scoped by an `X-Scope-OrgID` tenant header
+  (disabled in this lab → default `anonymous`; **Day 6** turns it on). This is exactly how the
+  NICE Mimir serves many teams from one cluster.
+
+### Query the metrics FROM Mimir
+Grafana → **Explore** → datasource **Mimir**. Try:
+```promql
+# request rate by endpoint (RED: Rate)
+sum by (endpoint) (rate(http_requests_total{job="week2-app"}[1m]))
+
+# error ratio (RED: Errors)
+sum(rate(http_requests_total{job="week2-app",status=~"5.."}[5m]))
+  / sum(rate(http_requests_total{job="week2-app"}[5m]))
+
+# p95 latency (RED: Duration) from the histogram
+histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job="week2-app"}[5m])))
+```
+Or straight from Mimir's Prometheus-compatible API:
+```bash
+curl -s -G 'http://localhost:9009/prometheus/api/v1/query' \
+  --data-urlencode 'query=sum(rate(http_requests_total{job="week2-app"}[1m]))'
+```
+
 ## Progress
 - [x] **D1** — structured JSON logging → Loki, queried with LogQL; labels-vs-cardinality understood
-- [ ] D2 — metrics → Mimir (Prometheus remote_write)
+- [x] **D2** — metrics → Mimir via Prometheus `remote_write`; PromQL from Mimir; why Mimir > raw Prometheus
 - [ ] D3 — traces → Tempo via OpenTelemetry + OTel Collector / Alloy
 - [ ] D4 — correlate trace → logs → metric (exemplars)
 - [ ] D5 — RED + USE dashboards
