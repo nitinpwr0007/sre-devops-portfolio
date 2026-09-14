@@ -1,0 +1,30 @@
+# OpenTelemetry Collector — the central telemetry pipeline (like the one at NICE).
+# App --OTLP/HTTP--> Collector --OTLP/gRPC--> Tempo.
+# In real life the collector also batches, adds resource attrs, tail-samples, and
+# can fan out to many backends; here it just forwards traces to Tempo.
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch: {}
+
+exporters:
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true          # plaintext inside the lab network
+
+service:
+  telemetry:
+    logs:
+      level: warn
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp/tempo]

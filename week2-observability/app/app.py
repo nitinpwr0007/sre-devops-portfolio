@@ -11,6 +11,9 @@ Design rule you enforce at NICE (labels vs high-cardinality):
 Promtail here only sets a couple of low-card labels; everything else is log content.
 
 Metrics (Prometheus) are kept so Day 2 can wire metrics → Mimir.
+Day 3 adds OpenTelemetry tracing: spans → OTel Collector → Tempo. The active
+trace_id/span_id are also stamped into each JSON log line so Day 4 can jump
+trace ↔ logs.
 Fault injection via env: FAIL_RATE (0..1 of /api/checkout → 500), LATENCY_MS.
 """
 import json
@@ -24,7 +27,25 @@ import uuid
 from flask import Flask, g, jsonify, request
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 
+# --- OpenTelemetry tracing (Day 3) ---
+from opentelemetry import trace
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.instrumentation.flask import FlaskInstrumentor
+
 app = Flask(__name__)
+
+# TracerProvider exports spans over OTLP/HTTP to the OTel Collector (which forwards
+# to Tempo). Endpoint comes from OTEL_EXPORTER_OTLP_ENDPOINT; the SDK appends
+# /v1/traces. service.name is how the app shows up in Tempo search.
+_resource = Resource.create({"service.name": os.getenv("OTEL_SERVICE_NAME", "week2-app")})
+_provider = TracerProvider(resource=_resource)
+_provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
+trace.set_tracer_provider(_provider)
+FlaskInstrumentor().instrument_app(app)
+
 
 REQUEST_COUNT = Counter(
     "http_requests_total",
@@ -129,20 +150,20 @@ def _log_and_measure(response):
 
     # One structured line per request. High-cardinality fields live HERE, not as labels.
     level = logging.ERROR if response.status_code >= 500 else logging.INFO
-    log.log(
-        level,
-        "request",
-        extra={
-            "fields": {
-                "method": request.method,
-                "endpoint": request.path,
-                "status": response.status_code,
-                "duration_ms": round(elapsed * 1000, 1),
-                "request_id": getattr(g, "request_id", "-"),
-                "remote_addr": request.remote_addr,
-            }
-        },
-    )
+    fields = {
+        "method": request.method,
+        "endpoint": request.path,
+        "status": response.status_code,
+        "duration_ms": round(elapsed * 1000, 1),
+        "request_id": getattr(g, "request_id", "-"),
+        "remote_addr": request.remote_addr,
+    }
+    # Stamp the active trace context so Day 4 can pivot logs <-> traces in Grafana.
+    span_ctx = trace.get_current_span().get_span_context()
+    if span_ctx.is_valid:
+        fields["trace_id"] = format(span_ctx.trace_id, "032x")
+        fields["span_id"] = format(span_ctx.span_id, "016x")
+    log.log(level, "request", extra={"fields": fields})
     return response
 
 

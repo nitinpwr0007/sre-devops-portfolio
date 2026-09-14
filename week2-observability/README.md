@@ -1,17 +1,19 @@
 # Week 2 — Observability Deep-Dive (LGTM stack)
 
 Mirrors the stack you run at NICE: **L**oki (logs), **G**rafana, **T**empo (traces), **M**imir (metrics).
-This week builds it up pillar by pillar. **Day 1 = logs → Loki. Day 2 = metrics → Mimir.**
+This week builds it up pillar by pillar. **Day 1 = logs → Loki. Day 2 = metrics → Mimir. Day 3 = traces → Tempo.**
 
 ## Stack
 | Service | Port | Purpose |
 |---|---|---|
-| app | http://localhost:8081 | Flask app: **JSON logs** to stdout + Prometheus **/metrics** |
+| app | http://localhost:8081 | Flask app: **JSON logs** + Prometheus **/metrics** + **OTel traces** |
 | Loki | http://localhost:3100 | log store, queried with LogQL |
 | Promtail | (internal) | discovers containers via Docker API → ships stdout to Loki |
 | Prometheus | http://localhost:9091 | scrapes app metrics, `remote_write`s to Mimir (Day 2) |
 | Mimir | http://localhost:9009 | long-term, multi-tenant metric store (Day 2) |
-| Grafana | http://localhost:3001 | Explore for LogQL + PromQL (anonymous Admin, no login needed) |
+| OTel Collector | (internal) | receives OTLP spans from app → forwards to Tempo (Day 3) |
+| Tempo | http://localhost:3200 | trace store, queried with TraceQL (Day 3) |
+| Grafana | http://localhost:3001 | Explore for LogQL + PromQL + TraceQL (anonymous Admin) |
 
 ## Run
 ```bash
@@ -87,10 +89,47 @@ curl -s -G 'http://localhost:9009/prometheus/api/v1/query' \
   --data-urlencode 'query=sum(rate(http_requests_total{job="week2-app"}[1m]))'
 ```
 
+## Day 3 — traces → Tempo (OpenTelemetry + OTel Collector)
+
+| Piece | Role |
+|---|---|
+| app (OTel SDK) | `FlaskInstrumentor` creates a **span per request**, exports OTLP/HTTP |
+| OTel Collector | central pipeline: receives OTLP → `batch` → forwards to Tempo |
+| Tempo | stores trace blocks, serves search/TraceQL on `:3200` |
+
+The flow: `app` → **OTLP/HTTP** → **OTel Collector** → **OTLP/gRPC** → **Tempo** → **Grafana (TraceQL)**.
+This app → collector → backend shape is exactly the OpenTelemetry pipeline used at NICE.
+
+### Why a Collector in the middle (not app → Tempo directly)?
+- **Decoupling** — apps only know one OTLP endpoint; swap/add backends (Tempo, vendors) without touching app code.
+- **Central processing** — batching, resource attributes, redaction, and **tail-sampling** happen once, in the collector.
+- **Fan-out** — one pipeline can route traces, metrics, and logs to different stores.
+
+### Trace ↔ logs bridge (sets up Day 4)
+Every JSON log line now carries the active `trace_id` and `span_id`:
+```json
+{"msg":"request","endpoint":"/api/checkout","status":200,"trace_id":"c3b5...","span_id":"6ddc..."}
+```
+Day 4 uses this to pivot **logs → trace** (and back) inside Grafana.
+
+### See the traces (TraceQL)
+Grafana → **Explore** → datasource **Tempo** → **Search** (or TraceQL). Try:
+```traceql
+{ resource.service.name = "week2-app" }
+{ resource.service.name = "week2-app" && duration > 100ms }
+{ span.http.status_code = 500 }
+```
+Or straight from Tempo's API:
+```bash
+curl -s -G 'http://localhost:3200/api/search' \
+  --data-urlencode 'q={ resource.service.name="week2-app" }' --data-urlencode 'limit=5'
+```
+
 ## Progress
 - [x] **D1** — structured JSON logging → Loki, queried with LogQL; labels-vs-cardinality understood
 - [x] **D2** — metrics → Mimir via Prometheus `remote_write`; PromQL from Mimir; why Mimir > raw Prometheus
-- [ ] D3 — traces → Tempo via OpenTelemetry + OTel Collector / Alloy
+- [x] **D3** — traces → Tempo via OpenTelemetry + OTel Collector; TraceQL; why a collector sits in the middle
+- [ ] D4 — correlate trace → logs → metric (exemplars)
 - [ ] D4 — correlate trace → logs → metric (exemplars)
 - [ ] D5 — RED + USE dashboards
 - [ ] D6 — multi-tenancy (X-Scope-OrgID) + retention/limits

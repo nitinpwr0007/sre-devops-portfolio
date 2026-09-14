@@ -15,7 +15,11 @@ services:
     environment:
       FAIL_RATE: "${FAIL_RATE:-0}"
       LATENCY_MS: "${LATENCY_MS:-0}"
+      # Day 3: export spans to the OTel Collector (SDK appends /v1/traces).
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      OTEL_SERVICE_NAME: "week2-app"
     restart: unless-stopped
+    depends_on: [otel-collector]
     networks: [obs]
 
   loki:
@@ -67,6 +71,28 @@ services:
     depends_on: [loki]
     networks: [obs]
 
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: week2-tempo
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    ports:
+      - "3200:3200"
+    volumes:
+      - ./tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+      - tempo-data:/var/tempo
+    restart: unless-stopped
+    networks: [obs]
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.109.0
+    container_name: week2-otel-collector
+    command: ["--config=/etc/otel/config.yml"]
+    volumes:
+      - ./otel-collector/otel-collector-config.yml:/etc/otel/config.yml:ro
+    restart: unless-stopped
+    depends_on: [tempo]
+    networks: [obs]
+
   grafana:
     image: grafana/grafana:11.2.0
     container_name: week2-grafana
@@ -91,4 +117,5 @@ networks:
 volumes:
   loki-data:
   mimir-data:
+  tempo-data:
   grafana-data:

@@ -18,3 +18,12 @@ datasources:
     jsonData:
       httpMethod: POST
       prometheusType: Mimir
+
+  - name: Tempo
+    type: tempo
+    access: proxy
+    uid: tempo
+    url: http://tempo:3200
+    jsonData:
+      # Day 4 will add tracesToLogs / tracesToMetrics correlation here.
+      httpMethod: GET
