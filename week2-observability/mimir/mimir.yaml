@@ -48,3 +48,4 @@ store_gateway:
 # Lab limits: allow fresh samples and a generous cardinality ceiling.
 limits:
   compactor_blocks_retention_period: 7d
+  max_global_exemplars_per_user: 100000     # enable exemplar storage (Day 4)

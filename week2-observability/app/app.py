@@ -25,7 +25,8 @@ import time
 import uuid
 
 from flask import Flask, g, jsonify, request
-from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import Counter, Histogram, REGISTRY
+from prometheus_client.exposition import choose_encoder
 
 # --- OpenTelemetry tracing (Day 3) ---
 from opentelemetry import trace
@@ -129,7 +130,10 @@ def checkout():
 
 @app.route("/metrics")
 def metrics():
-    return generate_latest(), 200, {"Content-Type": CONTENT_TYPE_LATEST}
+    # Honor the Accept header so Prometheus can request OpenMetrics and pull
+    # exemplars (trace_id) attached to histogram buckets (Day 4).
+    encoder, content_type = choose_encoder(request.headers.get("Accept", ""))
+    return encoder(REGISTRY), 200, {"Content-Type": content_type}
 
 
 @app.before_request
@@ -143,7 +147,14 @@ def _log_and_measure(response):
     if request.path == "/metrics":
         return response
     elapsed = time.perf_counter() - getattr(g, "start_time", time.perf_counter())
-    REQUEST_LATENCY.labels(endpoint=request.path).observe(elapsed)
+
+    # Grab trace context once; reused for the metric exemplar and the log line.
+    span_ctx = trace.get_current_span().get_span_context()
+    trace_id = format(span_ctx.trace_id, "032x") if span_ctx.is_valid else None
+
+    # Attach the trace_id as a histogram EXEMPLAR -> metric graph links to the trace.
+    exemplar = {"trace_id": trace_id} if trace_id else None
+    REQUEST_LATENCY.labels(endpoint=request.path).observe(elapsed, exemplar=exemplar)
     REQUEST_COUNT.labels(
         method=request.method, endpoint=request.path, status=response.status_code
     ).inc()
@@ -159,9 +170,8 @@ def _log_and_measure(response):
         "remote_addr": request.remote_addr,
     }
     # Stamp the active trace context so Day 4 can pivot logs <-> traces in Grafana.
-    span_ctx = trace.get_current_span().get_span_context()
-    if span_ctx.is_valid:
-        fields["trace_id"] = format(span_ctx.trace_id, "032x")
+    if trace_id:
+        fields["trace_id"] = trace_id
         fields["span_id"] = format(span_ctx.span_id, "016x")
     log.log(level, "request", extra={"fields": fields})
     return response

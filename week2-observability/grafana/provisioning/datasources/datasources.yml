@@ -1,4 +1,9 @@
 apiVersion: 1
+
+# Day 4: the correlation triangle wired across all three datasources.
+#   Loki  derivedFields          -> log line's trace_id becomes a link to Tempo
+#   Mimir exemplarTraceIdDest    -> latency-graph exemplar dots link to Tempo
+#   Tempo tracesToLogsV2/Metrics -> a span jumps to its logs (Loki) and RED metrics (Mimir)
 datasources:
   - name: Loki
     type: loki
@@ -7,8 +12,14 @@ datasources:
     url: http://loki:3100
     isDefault: true
     jsonData:
-      # Day 4 will use this to jump trace <-> logs; harmless now.
       maxLines: 1000
+      # Extract trace_id from the JSON log line and turn it into a Tempo link.
+      derivedFields:
+        - name: TraceID
+          matcherType: regex
+          matcherRegex: '"trace_id":\s*"(\w+)"'
+          url: '${__value.raw}'
+          datasourceUid: tempo
 
   - name: Mimir
     type: prometheus
@@ -18,6 +29,10 @@ datasources:
     jsonData:
       httpMethod: POST
       prometheusType: Mimir
+      # Exemplar dots on a metric graph carry a trace_id -> click through to Tempo.
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: tempo
 
   - name: Tempo
     type: tempo
@@ -25,5 +40,20 @@ datasources:
     uid: tempo
     url: http://tempo:3200
     jsonData:
-      # Day 4 will add tracesToLogs / tracesToMetrics correlation here.
       httpMethod: GET
+      # Span -> its logs in Loki (trace_id lives inside the JSON line, so custom query).
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: '-1h'
+        spanEndTimeShift: '1h'
+        filterByTraceID: false
+        customQuery: true
+        query: '{container="week2-demo"} | json | trace_id="${__trace.traceId}"'
+      # Span -> RED metrics in Mimir for the same service.
+      tracesToMetrics:
+        datasourceUid: mimir
+        spanStartTimeShift: '-1h'
+        spanEndTimeShift: '1h'
+        queries:
+          - name: 'Request rate'
+            query: 'sum(rate(http_requests_total{job="week2-app"}[1m]))'

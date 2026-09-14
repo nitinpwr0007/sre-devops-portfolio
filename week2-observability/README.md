@@ -125,11 +125,43 @@ curl -s -G 'http://localhost:3200/api/search' \
   --data-urlencode 'q={ resource.service.name="week2-app" }' --data-urlencode 'limit=5'
 ```
 
+## Day 4 — correlate trace ↔ logs ↔ metric (the payoff)
+
+The three pillars stop being silos. One request now links across all of them:
+
+| Direction | How it's wired | Where you click |
+|---|---|---|
+| **log → trace** | Loki `derivedFields` regex-extracts `trace_id` from the JSON line | a log row → **TraceID** button |
+| **metric → trace** | app attaches `trace_id` as a histogram **exemplar**; Mimir `exemplarTraceIdDestinations` | a ◇ dot on the latency graph |
+| **trace → logs** | Tempo `tracesToLogsV2` custom query `trace_id="${__trace.traceId}"` | a span → **Logs** button |
+| **trace → metrics** | Tempo `tracesToMetrics` RED query | a span → **Metrics** button |
+
+### Exemplars: how metric → trace works
+1. App serves **OpenMetrics** (`/metrics` honors the `Accept` header) and attaches the active
+   `trace_id` to each histogram observation: `REQUEST_LATENCY.observe(elapsed, exemplar={"trace_id": ...})`.
+2. Prometheus scrapes exemplars (`--enable-feature=exemplar-storage`) and `remote_write`s them
+   (`send_exemplars: true`) to Mimir (`max_global_exemplars_per_user` > 0).
+3. Grafana renders exemplar ◇ dots on the latency panel; each links straight to its trace in Tempo.
+
+Verify the exemplar path from the CLI:
+```bash
+curl -s -G 'http://localhost:9009/prometheus/api/v1/query_exemplars' \
+  --data-urlencode 'query=http_request_duration_seconds_bucket{job="week2-app"}' \
+  --data-urlencode "start=$(($(date +%s)-600))" --data-urlencode "end=$(date +%s)"
+```
+
+### Try the full loop in Grafana
+1. **Explore → Loki**: `{container="week2-demo"} | json | status >= 500` → expand a row → click **TraceID**.
+2. Lands in **Tempo** on that exact trace → click a span's **Logs** button → back to the same request's logs.
+3. **Explore → Mimir**: graph `histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))`,
+   enable **Exemplars** → click a ◇ dot → opens the slow request's trace.
+
 ## Progress
 - [x] **D1** — structured JSON logging → Loki, queried with LogQL; labels-vs-cardinality understood
 - [x] **D2** — metrics → Mimir via Prometheus `remote_write`; PromQL from Mimir; why Mimir > raw Prometheus
 - [x] **D3** — traces → Tempo via OpenTelemetry + OTel Collector; TraceQL; why a collector sits in the middle
-- [ ] D4 — correlate trace → logs → metric (exemplars)
+- [x] **D4** — correlate trace ↔ logs ↔ metric (derivedFields, tracesToLogs/Metrics, exemplars)
+- [ ] D5 — RED + USE dashboards
 - [ ] D4 — correlate trace → logs → metric (exemplars)
 - [ ] D5 — RED + USE dashboards
 - [ ] D6 — multi-tenancy (X-Scope-OrgID) + retention/limits

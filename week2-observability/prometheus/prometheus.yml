@@ -20,5 +20,6 @@ scrape_configs:
 # Ship all scraped samples to Mimir's push endpoint.
 remote_write:
   - url: http://mimir:9009/api/v1/push
+    send_exemplars: true       # forward histogram exemplars (trace_id) to Mimir
     # With multitenancy off, Mimir files these under the 'anonymous' tenant.
     # Day 6 will add: headers: { X-Scope-OrgID: <tenant> }
