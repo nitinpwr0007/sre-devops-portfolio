@@ -1,0 +1,23 @@
+# Ingress = L7 (HTTP) entry point. The ingress-nginx controller watches this
+# object and reconfigures itself to route http://localhost/ to the week3-app
+# Service. Full request path:
+#   curl localhost -> kind node :80 (hostPort) -> ingress-nginx controller Pod
+#     -> week3-app Service (ClusterIP) -> one week3-app Pod.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: week3-app
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: week3-app
+                port:
+                  number: 80

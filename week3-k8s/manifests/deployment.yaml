@@ -1,0 +1,63 @@
+# Deployment = desired state for a set of stateless Pods.
+# The Deployment creates a ReplicaSet, which creates 3 Pods; the
+# controller-manager (control plane) constantly reconciles actual -> desired.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: week3-app
+  labels:
+    app: week3-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: week3-app
+  template:
+    metadata:
+      labels:
+        app: week3-app
+    spec:
+      containers:
+        - name: app
+          image: week3-app:day2b
+          # Image is loaded straight into the kind nodes with `kind load`, so
+          # never pull from a registry.
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          # Downward API -> the app reports which Pod/node served each request,
+          # making Service load-balancing visible.
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          # Liveness: restart the container if the process wedges.
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          # Readiness: only add the Pod to the Service endpoints once it answers.
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8080
+            initialDelaySeconds: 2
+            periodSeconds: 5

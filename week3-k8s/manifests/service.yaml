@@ -1,0 +1,19 @@
+# Service = stable virtual IP + DNS name in front of the 3 Pods.
+# kube-proxy programs each node so that traffic to the ClusterIP is
+# load-balanced across the Pods currently in the Endpoints (i.e. the Ready
+# Pods matching the selector). This is the layer that turns 3 ephemeral Pod
+# IPs into one durable address: week3-app.default.svc.cluster.local.
+apiVersion: v1
+kind: Service
+metadata:
+  name: week3-app
+  labels:
+    app: week3-app
+spec:
+  type: ClusterIP
+  selector:
+    app: week3-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
