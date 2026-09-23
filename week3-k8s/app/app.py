@@ -23,15 +23,30 @@ POD_NAME = os.getenv("POD_NAME", socket.gethostname())
 POD_IP = os.getenv("POD_IP", "unknown")
 NODE_NAME = os.getenv("NODE_NAME", "unknown")
 
+# Day 4: config injected from a ConfigMap (GREETING/RELEASE) and a Secret (API_TOKEN).
+GREETING = os.getenv("GREETING", "hello from Kubernetes")
+RELEASE = os.getenv("RELEASE", "unknown")
+API_TOKEN = os.getenv("API_TOKEN", "")
+
 # In-memory probe switches; reset to healthy whenever the process (re)starts.
 STATE = {"ready": True, "healthy": True}
+
+
+def _mask(token):
+    """Never echo a secret in full; show only that it's set + last 4 chars."""
+    if not token:
+        return None
+    return "****" + token[-4:] if len(token) > 4 else "****"
 
 
 @app.get("/")
 def home():
     return jsonify(
         app="week3-k8s",
-        msg="hello from Kubernetes",
+        msg=GREETING,
+        release=RELEASE,
+        token_set=bool(API_TOKEN),
+        token=_mask(API_TOKEN),
         pod=POD_NAME,
         pod_ip=POD_IP,
         node=NODE_NAME,

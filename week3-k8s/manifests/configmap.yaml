@@ -1,0 +1,11 @@
+# ConfigMap = non-secret config, decoupled from the image.
+# Change a value here + roll the Deployment and behavior changes with no rebuild.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: week3-app-config
+  labels:
+    app: week3-app
+data:
+  GREETING: "hello from ConfigMap (v1)"
+  RELEASE: "day4-v1"

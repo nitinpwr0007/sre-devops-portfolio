@@ -18,12 +18,16 @@ spec:
     spec:
       containers:
         - name: app
-          image: week3-app:day2b
+          image: week3-app:day4
           # Image is loaded straight into the kind nodes with `kind load`, so
           # never pull from a registry.
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
+          # Non-secret config (GREETING/RELEASE) pulled in as env vars.
+          envFrom:
+            - configMapRef:
+                name: week3-app-config
           # Downward API -> the app reports which Pod/node served each request,
           # making Service load-balancing visible.
           env:
@@ -39,6 +43,12 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+            # Secret value injected as a single env var (kept out of the image).
+            - name: API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: week3-app-secret
+                  key: API_TOKEN
           resources:
             requests:
               cpu: 50m
