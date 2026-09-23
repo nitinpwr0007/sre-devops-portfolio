@@ -1,0 +1,26 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: week3-app
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: week3-app
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          # scale to keep average CPU across pods at ~50% of the 50m request
+          type: Utilization
+          averageUtilization: 50
+  behavior:
+    scaleUp:
+      # react fast to load so the scale-out is visible in the lab
+      stabilizationWindowSeconds: 0
+    scaleDown:
+      # wait 60s of calm before scaling back in (default is 300s)
+      stabilizationWindowSeconds: 60

@@ -1,6 +1,6 @@
 # Deployment = desired state for a set of stateless Pods.
-# The Deployment creates a ReplicaSet, which creates 3 Pods; the
-# controller-manager (control plane) constantly reconciles actual -> desired.
+# Replica count is managed by the HorizontalPodAutoscaler (manifests/hpa.yaml),
+# so replicas is intentionally omitted here to avoid fighting the HPA on apply.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -8,7 +8,6 @@ metadata:
   labels:
     app: week3-app
 spec:
-  replicas: 3
   selector:
     matchLabels:
       app: week3-app
