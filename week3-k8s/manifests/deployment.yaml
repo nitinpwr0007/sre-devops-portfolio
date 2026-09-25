@@ -16,6 +16,30 @@ spec:
       labels:
         app: week3-app
     spec:
+      # topologySpreadConstraints = the MODERN way to spread replicas evenly.
+      # maxSkew:1 over hostname -> no node may hold more than 1 pod more than any
+      # other. whenUnsatisfiable: ScheduleAnyway (soft) so a node drain can still
+      # reschedule the evicted pod onto the one remaining worker (DoNotSchedule
+      # would block it, since 2 pods on 1 node breaks maxSkew during a drain).
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: week3-app
+      affinity:
+        # podAntiAffinity = the CLASSIC way to say "keep my replicas apart."
+        # preferred (soft) so scheduling still succeeds when nodes are scarce;
+        # `required` would be a hard rule that can leave pods Pending.
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app: week3-app
       containers:
         - name: app
           image: week3-app:day4

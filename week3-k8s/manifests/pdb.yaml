@@ -1,0 +1,21 @@
+# PodDisruptionBudget = a floor on how many app pods must stay Ready during a
+# VOLUNTARY disruption (node drain, cluster upgrade, `kubectl delete node`).
+# It does NOT protect against involuntary loss (a node crashing) — only against
+# disruptions the control plane initiates, which it will BLOCK if honoring them
+# would drop below this floor.
+#
+# minAvailable: 1 -> a drain may evict app pods only while >=1 stays Ready.
+# With HPA min=2 that means the drain evicts one pod, waits for its replacement
+# to become Ready on another node, then evicts the next — never zero at once.
+# (Alternative: maxUnavailable: 1, the mirror-image way to express the same.)
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: week3-app
+  labels:
+    app: week3-app
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: week3-app
