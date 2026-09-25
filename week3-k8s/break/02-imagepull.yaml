@@ -1,0 +1,16 @@
+# FAILURE 2: ImagePullBackOff / ErrImagePull
+# The image tag does not exist, so the node can never pull it. The pod is stuck
+# and never even reaches Running.
+# Diagnose with: kubectl describe pod (Events: Failed to pull image ... not found
+# / manifest unknown). The fix is always "correct the image name/tag/registry".
+apiVersion: v1
+kind: Pod
+metadata:
+  name: imagepull-demo
+  labels:
+    demo: break
+spec:
+  containers:
+    - name: nope
+      image: week3-app:v-does-not-exist-9999 # tag that was never built or pushed
+      imagePullPolicy: IfNotPresent

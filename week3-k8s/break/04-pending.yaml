@@ -1,0 +1,20 @@
+# FAILURE 4: Pending (unschedulable)
+# The pod requests 100 CPU cores. No node in the cluster has that much, so the
+# scheduler can never place it and the pod stays Pending forever.
+# Diagnose with: kubectl describe pod (Events: FailedScheduling ... Insufficient
+# cpu). Contrast with ImagePullBackOff: here the pod never gets ASSIGNED to a
+# node at all (no nodeName), vs a scheduled pod that can't pull its image.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pending-demo
+  labels:
+    demo: break
+spec:
+  containers:
+    - name: greedy
+      image: week3-app:day4
+      imagePullPolicy: IfNotPresent
+      resources:
+        requests:
+          cpu: "100" # 100 whole cores — unschedulable on this cluster

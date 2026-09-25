@@ -1,0 +1,23 @@
+# FAILURE 3: OOMKilled
+# The process allocates ~300MB but the container's memory LIMIT is 32Mi. The
+# kernel's cgroup OOM killer terminates it; Kubernetes restarts it and it OOMs
+# again -> CrashLoopBackOff whose Last State reason is OOMKilled.
+# Diagnose with: kubectl describe pod (Last State: Terminated, Reason: OOMKilled).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: oom-demo
+  labels:
+    demo: break
+spec:
+  containers:
+    - name: hog
+      image: week3-app:day4 # python:3.12-slim base has python
+      imagePullPolicy: IfNotPresent
+      command: ["python", "-c", "x = bytearray(300 * 1024 * 1024); import time; time.sleep(600)"]
+      resources:
+        requests:
+          memory: "16Mi"
+        limits:
+          memory: "32Mi" # far less than the 300MB the process tries to grab
+  restartPolicy: Always

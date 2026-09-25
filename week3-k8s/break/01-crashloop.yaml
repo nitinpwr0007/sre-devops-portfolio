@@ -1,0 +1,18 @@
+# FAILURE 1: CrashLoopBackOff
+# The container starts, runs briefly, then exits non-zero. Kubernetes restarts
+# it, it crashes again, and the kubelet backs off with growing delays.
+# Diagnose with: kubectl describe pod (Last State: Terminated, Exit Code) +
+# kubectl logs (the app's own crash output).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: crashloop-demo
+  labels:
+    demo: break
+spec:
+  containers:
+    - name: boom
+      image: week3-app:day4 # already loaded in kind, no pull needed
+      imagePullPolicy: IfNotPresent
+      command: ["sh", "-c", "echo 'starting up...'; sleep 2; echo 'fatal: crashing on purpose'; exit 1"]
+  restartPolicy: Always

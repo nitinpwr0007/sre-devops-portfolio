@@ -1,0 +1,50 @@
+# FAILURE 6: PVC unbound (the stateful gotcha)
+# The pod requests a PersistentVolumeClaim whose storageClassName does not exist,
+# so no provisioner ever creates a PersistentVolume. The PVC stays Pending
+# forever, and any pod that mounts it is stuck Pending too — it never schedules.
+# This is the #1 way StatefulSets (Loki/Mimir/Tempo) silently fail to come up.
+#
+# Diagnose with:
+#   kubectl get pvc                      -> STATUS Pending
+#   kubectl describe pvc stuck-claim     -> Events: storageclass "no-such-class"
+#                                           not found (no provisioner)
+#   kubectl describe pod pvc-demo        -> Events: pod has unbound immediate
+#                                           PersistentVolumeClaims
+# Contrast with Pending-from-resources (04): there the POD is unschedulable on
+# its own; here the pod is blocked UPSTREAM because its storage never binds.
+# Fix: point the PVC at a real StorageClass (this cluster's default is
+# "standard", rancher.io/local-path).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: stuck-claim
+  labels:
+    demo: break
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: no-such-class # this StorageClass does not exist -> never binds
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pvc-demo
+  labels:
+    demo: break
+spec:
+  containers:
+    - name: needs-storage
+      image: week3-app:day4
+      imagePullPolicy: IfNotPresent
+      command: ["sh", "-c", "echo 'if you see this, the volume bound'; sleep 600"]
+      volumeMounts:
+        - name: data
+          mountPath: /data
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: stuck-claim
+  restartPolicy: Always

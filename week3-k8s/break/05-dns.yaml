@@ -1,0 +1,43 @@
+# FAILURE 5: DNS / CoreDNS failure
+# The pod itself is healthy, but in-cluster name resolution is broken. This is a
+# CLUSTER-level fault, not a pod-level one: you induce it by scaling CoreDNS to
+# zero, then watch every pod's DNS lookups fail with SERVFAIL / Name resolution
+# failure. This is the classic "the app can't reach the database by service name"
+# incident.
+#
+# Drill (see break/README.md for full walkthrough):
+#   1. kubectl apply -f break/05-dns.yaml           # deploy the resolver probe
+#   2. kubectl logs -f dns-demo                      # healthy: resolves every 3s
+#   3. kubectl -n kube-system scale deploy/coredns --replicas=0   # BREAK dns
+#   4. kubectl logs -f dns-demo                      # now: resolution FAILS
+#   5. kubectl -n kube-system scale deploy/coredns --replicas=2   # HEAL
+#
+# Diagnose with: kubectl -n kube-system get pods -l k8s-app=kube-dns (0 running),
+# kubectl get svc -n kube-system kube-dns, and the resolver's own log output.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: dns-demo
+  labels:
+    demo: break
+spec:
+  containers:
+    - name: resolver
+      image: week3-app:day4 # python:3.12-slim base — has socket.gethostbyname
+      imagePullPolicy: IfNotPresent
+      command:
+        - python
+        - -c
+        - |
+          import socket, time, datetime
+          targets = ["kubernetes.default.svc.cluster.local", "week3-app.default.svc.cluster.local"]
+          while True:
+              ts = datetime.datetime.now().strftime("%H:%M:%S")
+              for name in targets:
+                  try:
+                      ip = socket.gethostbyname(name)
+                      print(f"{ts} OK   {name} -> {ip}", flush=True)
+                  except Exception as e:
+                      print(f"{ts} FAIL {name} -> {e}", flush=True)
+              time.sleep(3)
+  restartPolicy: Always
