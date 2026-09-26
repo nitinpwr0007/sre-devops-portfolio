@@ -11,6 +11,8 @@ security_groups = {
     description = "Allow HTTP from anywhere (dev)"
     ingress = [
       { from_port = 80, to_port = 80, protocol = "tcp", cidr_blocks = ["0.0.0.0/0"] },
+      # SSH from inside the VPC only (bastion) — adopted from an out-of-band change (D4 drift drill)
+      { from_port = 22, to_port = 22, protocol = "tcp", cidr_blocks = ["10.10.0.0/16"] },
     ]
   }
 }
