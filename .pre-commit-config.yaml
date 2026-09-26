@@ -1,0 +1,26 @@
+# Policy-as-code gate for Terraform IaC. Local hooks call already-installed
+# binaries (no hook repos cloned, no pip installs) so it works behind the
+# corporate TLS proxy. Hooks only fire when week4-iac/*.tf files are staged.
+repos:
+  - repo: local
+    hooks:
+      - id: terraform-fmt
+        name: terraform fmt (week4-iac)
+        entry: bash -c 'cd week4-iac && terraform fmt -check -recursive'
+        language: system
+        files: ^week4-iac/.*\.tf$
+        pass_filenames: false
+
+      - id: tflint
+        name: tflint (week4-iac)
+        entry: bash -c 'cd week4-iac && tflint'
+        language: system
+        files: ^week4-iac/.*\.tf$
+        pass_filenames: false
+
+      - id: trivy-config
+        name: trivy IaC misconfig scan (week4-iac)
+        entry: bash -c 'trivy config --exit-code 1 --severity HIGH,CRITICAL week4-iac'
+        language: system
+        files: ^week4-iac/.*\.tf$
+        pass_filenames: false
