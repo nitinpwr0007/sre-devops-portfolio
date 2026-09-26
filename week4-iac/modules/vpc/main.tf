@@ -13,7 +13,9 @@ resource "aws_internet_gateway" "this" {
 }
 
 # One public subnet per AZ. count fans the list out into N resources; each pulls
-# its CIDR and AZ from the same index so they stay paired.
+# its CIDR and AZ from the same index so they stay paired. These are PUBLIC
+# subnets by design (public web tier), so auto-assigned public IPs are intended.
+#trivy:ignore:AVD-AWS-0164
 resource "aws_subnet" "public" {
   count                   = length(var.public_subnet_cidrs)
   vpc_id                  = aws_vpc.this.id

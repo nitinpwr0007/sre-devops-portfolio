@@ -7,6 +7,27 @@ resource "aws_s3_bucket" "state" {
   bucket = "tf-state"
 }
 
+# Block ALL public access — the state bucket holds infra secrets, never public.
+resource "aws_s3_bucket_public_access_block" "state" {
+  bucket                  = aws_s3_bucket.state.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# Encrypt state objects at rest. CMK ignore: LocalStack SERVICES has no KMS, so
+# SSE-S3 (AES256) is used instead of a customer-managed key.
+#trivy:ignore:AVD-AWS-0132
+resource "aws_s3_bucket_server_side_encryption_configuration" "state" {
+  bucket = aws_s3_bucket.state.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
 # Versioning = keep a history of every state file, so a bad apply is recoverable.
 resource "aws_s3_bucket_versioning" "state" {
   bucket = aws_s3_bucket.state.id
