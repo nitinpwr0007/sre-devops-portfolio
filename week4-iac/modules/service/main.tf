@@ -1,8 +1,8 @@
-# for_each over a SET of subnet ids => one instance per subnet. Using toset()
-# means each.key == each.value == the subnet id, so instances are keyed by
-# subnet (aws_instance.this["subnet-0124c74b"]) instead of a fragile index.
+# for_each over a MAP with static keys (the AZ). each.key is known at plan time
+# so Terraform can name the instances; each.value (subnet id) may be unknown
+# until apply, which for_each allows for VALUES but not keys.
 resource "aws_instance" "this" {
-  for_each = toset(var.subnet_ids)
+  for_each = var.subnet_ids
 
   ami                    = var.ami_id
   instance_type          = var.instance_type

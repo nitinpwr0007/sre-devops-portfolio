@@ -18,14 +18,14 @@ module "security" {
   security_groups = var.security_groups
 }
 
-# Service module: one EC2 instance per public subnet (for_each). Takes the
-# subnet ids from vpc and the SG ids from security -> module composition.
+# Service module: one EC2 instance per public subnet (for_each). Build a map
+# keyed by AZ (static, known at plan) => subnet id (may be unknown until apply).
 module "service" {
   source = "./modules/service"
 
   name               = var.name
   ami_id             = var.ami_id
   instance_type      = var.instance_type
-  subnet_ids         = module.vpc.public_subnet_ids
+  subnet_ids         = { for idx, id in module.vpc.public_subnet_ids : var.azs[idx] => id }
   security_group_ids = [for id in module.security.security_group_ids : id]
 }

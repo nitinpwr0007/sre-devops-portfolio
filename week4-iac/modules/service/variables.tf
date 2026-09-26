@@ -4,8 +4,8 @@ variable "name" {
 }
 
 variable "subnet_ids" {
-  description = "Subnets to launch one instance into each"
-  type        = list(string)
+  description = "Map of stable key (e.g. AZ) => subnet id; one instance per entry"
+  type        = map(string)
 }
 
 variable "security_group_ids" {
