@@ -21,3 +21,44 @@ variable "azs" {
   type        = list(string)
   default     = ["us-east-1a", "us-east-1b"]
 }
+
+# Map of security groups -> passed straight into the security module's for_each.
+variable "security_groups" {
+  description = "Security groups to create (name => rules)"
+  type = map(object({
+    description = string
+    ingress = list(object({
+      from_port   = number
+      to_port     = number
+      protocol    = string
+      cidr_blocks = list(string)
+    }))
+  }))
+  default = {
+    web = {
+      description = "Allow HTTP/HTTPS from anywhere"
+      ingress = [
+        { from_port = 80, to_port = 80, protocol = "tcp", cidr_blocks = ["0.0.0.0/0"] },
+        { from_port = 443, to_port = 443, protocol = "tcp", cidr_blocks = ["0.0.0.0/0"] },
+      ]
+    }
+    app = {
+      description = "Allow app port from inside the VPC only"
+      ingress = [
+        { from_port = 8080, to_port = 8080, protocol = "tcp", cidr_blocks = ["10.0.0.0/16"] },
+      ]
+    }
+  }
+}
+
+variable "ami_id" {
+  description = "AMI for the service instances (placeholder; LocalStack mocks EC2)"
+  type        = string
+  default     = "ami-0c55b159cbfafe1f0"
+}
+
+variable "instance_type" {
+  description = "EC2 instance type for the service"
+  type        = string
+  default     = "t3.micro"
+}
