@@ -1,0 +1,17 @@
+# LocalStack = a local AWS emulator. Terraform + the AWS provider talk to it
+# exactly like real AWS, but everything runs on your laptop for $0 and no signup.
+# Only the services this week needs are enabled.
+services:
+  localstack:
+    # pinned community version; :latest now defaults to a Pro build that needs a license token
+    image: localstack/localstack:3.8.1
+    container_name: week4-localstack
+    ports:
+      # host 14566 -> container 4566 (host 4566 is taken by another project)
+      - "14566:4566"
+    environment:
+      - SERVICES=s3,dynamodb,ec2,iam,sts
+      - AWS_DEFAULT_REGION=us-east-1
+      - DEBUG=0
+    volumes:
+      - "./.localstack:/var/lib/localstack"
