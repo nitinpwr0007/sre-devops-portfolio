@@ -1,0 +1,82 @@
+# Week 5 D1 — CI pipeline: build -> test -> scan -> push
+#
+# GitHub Actions only runs workflows found in .github/workflows/ AT THE REPO ROOT.
+# This repo's root is labs/, so the file lives here (not under week5-cicd-gitops/).
+# `paths:` scopes it so it only runs when Week 5 app files change.
+name: week5-ci
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "week5-cicd-gitops/app/**"
+      - ".github/workflows/week5-ci.yml"
+  pull_request:
+    paths:
+      - "week5-cicd-gitops/app/**"
+      - ".github/workflows/week5-ci.yml"
+
+# Least-privilege token: read the repo, write packages (push image to GHCR).
+permissions:
+  contents: read
+  packages: write
+
+env:
+  # GHCR image name must be lowercase; ${{ github.repository }} = owner/repo.
+  IMAGE: ghcr.io/${{ github.repository }}/week5-app
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: week5-cicd-gitops/app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: pip install -r requirements.txt
+      - name: Run unit tests
+        run: pytest -q
+
+  build-scan-push:
+    needs: test # only build if tests pass
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Build locally first (load into the runner's docker) so trivy can scan the
+      # exact image before it's ever pushed. Tag with the commit SHA for traceability.
+      - name: Build image
+        run: |
+          docker build \
+            --build-arg APP_VERSION=${{ github.sha }} \
+            -t "$IMAGE:${{ github.sha }}" \
+            week5-cicd-gitops/app
+
+      # Scan the built image; fail the pipeline on HIGH/CRITICAL vulns (the gate).
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ env.IMAGE }}:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true # don't fail on vulns with no patch available yet
+
+      # Only publish on pushes to main (not PRs). GITHUB_TOKEN authenticates to GHCR.
+      - name: Log in to GHCR
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push image (sha + latest)
+        if: github.event_name == 'push'
+        run: |
+          docker tag "$IMAGE:${{ github.sha }}" "$IMAGE:latest"
+          docker push "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:latest"
