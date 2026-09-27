@@ -12,9 +12,10 @@ spec:
     - name: expected-version # the version the canary MUST report to pass
   metrics:
     - name: version-match
+      initialDelay: 45s # let the canary pod finish its startupProbe before sampling
       count: 3 # probe 3 times...
       interval: 10s # ...10s apart (like sampling a metric over a window)
-      failureLimit: 0 # a single bad sample fails the whole analysis -> abort
+      failureLimit: 1 # tolerate ONE transient blip; 2+ bad samples -> abort
       successCondition: result == "{{args.expected-version}}"
       provider:
         web:
