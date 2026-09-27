@@ -47,3 +47,60 @@ trivy image --severity HIGH,CRITICAL --ignore-unfixed week5-app:local  # scan
 After pushing, watch the run: `gh run watch` (or the Actions tab). A green run
 publishes the image to **Packages** on the GitHub repo.
 
+## D2 — ArgoCD on kind: GitOps auto-sync
+
+**GitOps** = Git is the single source of truth for what runs in the cluster. A
+controller (**ArgoCD**) watches a Git path and continuously **reconciles** the
+cluster to match it. You stop running `kubectl apply` by hand; you `git push`,
+and ArgoCD applies.
+
+```
+deploy/                  desired state ArgoCD keeps the cluster matched to
+  deployment.yaml        week5-app (the image CI published), 1 replica, probes
+  service.yaml           ClusterIP :80 -> :8080
+argocd/
+  application.yaml       the Application CR: watch deploy/ path, auto-sync to ns week5
+```
+
+**The reconcile loop**
+```
+Git (deploy/*.yaml)  --watched by-->  ArgoCD  --applies-->  cluster (ns week5)
+        ^                                                        |
+        \--------------- selfHeal reverts manual drift ----------/
+```
+
+`syncPolicy.automated`: `prune` deletes what you remove from Git; `selfHeal`
+reverts manual `kubectl` edits back to the Git state.
+
+### Setup (one time)
+```bash
+kind create cluster --name week5
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+kubectl -n argocd rollout status deploy/argocd-server   # wait until Ready
+```
+
+### Register the app
+```bash
+kubectl apply -f week5-cicd-gitops/argocd/application.yaml
+kubectl -n argocd get applications          # week5-app -> Synced / Healthy
+kubectl -n week5 get pods                    # the app pod ArgoCD created
+```
+
+> NOTE: the GHCR package must be **public** (Packages -> week5-app -> settings ->
+> change visibility) or the cluster can't pull it. Public is fine for a lab.
+
+### Prove GitOps
+Edit `deploy/deployment.yaml` `replicas: 1` -> `2`, commit, push. Within ~3 min
+(or click Refresh in the UI) ArgoCD syncs and a 2nd pod appears — no `kubectl`.
+Then try `kubectl -n week5 scale deploy/week5-app --replicas=5`: **selfHeal**
+drags it back to 2, because Git says 2.
+
+### See the UI
+```bash
+kubectl -n argocd port-forward svc/argocd-server 8081:443
+# open https://localhost:8081  (user: admin)
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d ; echo
+```
+
+
