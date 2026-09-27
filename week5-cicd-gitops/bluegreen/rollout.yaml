@@ -26,7 +26,7 @@ spec:
           imagePullPolicy: IfNotPresent # image already on the node; don't re-pull
           env:
             - name: APP_VERSION
-              value: v2 # bump this to deploy a new "green"
+              value: broken # DEMO B: bad green; gate expects v2 -> no flip
           ports:
             - containerPort: 8080
           startupProbe:
