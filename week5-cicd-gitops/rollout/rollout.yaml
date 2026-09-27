@@ -25,7 +25,7 @@ spec:
           imagePullPolicy: IfNotPresent # image is already on the node; don't re-pull
           env:
             - name: APP_VERSION
-              value: v2 # bump this to trigger a canary rollout
+              value: v3 # bump this to trigger a canary rollout
           ports:
             - containerPort: 8080
           startupProbe:
@@ -47,6 +47,7 @@ spec:
               port: 8080
             periodSeconds: 10
             timeoutSeconds: 3
+            failureThreshold: 6 # tolerate transient timeouts on a loaded node
           resources:
             requests:
               cpu: 50m
@@ -56,9 +57,18 @@ spec:
               memory: 128Mi
   strategy:
     canary:
+      canaryService: rollout-demo-canary # Rollouts points this at canary pods only
+      stableService: rollout-demo-stable # ...and this at stable pods only
       steps:
         - setWeight: 25
-        - pause: {} # indefinite — hold here until you promote (the manual gate)
+        - analysis: # AUTO gate: probe the canary; promote if healthy, abort if not
+            templates:
+              - templateName: version-check
+            args:
+              - name: service-name
+                value: rollout-demo-canary.rollout.svc.cluster.local
+              - name: expected-version
+                value: v3 # must match APP_VERSION for the gate to pass
         - setWeight: 50
         - pause: { duration: 20s }
         - setWeight: 75

@@ -1,10 +1,38 @@
-# Single Service for the basic canary. Without a service mesh/ingress traffic
-# router, Argo Rollouts approximates the canary weight by the ratio of canary vs
-# stable pods behind this one Service.
+# Three Services for the analysis-gated canary:
+#  - rollout-demo         : main entrypoint (all pods; weight = pod ratio)
+#  - rollout-demo-canary  : Rollouts injects the canary pod-hash -> canary pods ONLY
+#  - rollout-demo-stable  : Rollouts injects the stable pod-hash -> stable pods ONLY
+# The AnalysisTemplate probes rollout-demo-canary so it judges the NEW version only.
 apiVersion: v1
 kind: Service
 metadata:
   name: rollout-demo
+  labels:
+    app: rollout-demo
+spec:
+  selector:
+    app: rollout-demo
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rollout-demo-canary
+  labels:
+    app: rollout-demo
+spec:
+  selector:
+    app: rollout-demo
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rollout-demo-stable
   labels:
     app: rollout-demo
 spec:

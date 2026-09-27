@@ -1,0 +1,23 @@
+# The metric gate. An AnalysisTemplate defines a check the Rollout runs against
+# the canary. Here the "metric" is the version the canary reports on GET / .
+# In production this provider block would be `prometheus:` querying a success-rate
+# or latency query instead of `web:` — the pass/fail mechanics are identical.
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: version-check
+spec:
+  args:
+    - name: service-name # the canary Service to probe
+    - name: expected-version # the version the canary MUST report to pass
+  metrics:
+    - name: version-match
+      count: 3 # probe 3 times...
+      interval: 10s # ...10s apart (like sampling a metric over a window)
+      failureLimit: 0 # a single bad sample fails the whole analysis -> abort
+      successCondition: result == "{{args.expected-version}}"
+      provider:
+        web:
+          url: "http://{{args.service-name}}/"
+          timeoutSeconds: 5
+          jsonPath: "{$.version}" # extract the "version" field from the JSON body
