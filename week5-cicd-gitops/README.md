@@ -129,4 +129,46 @@ a **startupProbe** (freezes liveness/readiness until boot completes) and raise
 `timeoutSeconds` to 3. Lesson: never let a liveness probe run during startup — use
 a startupProbe for slow-booting apps, not a bigger `initialDelaySeconds`.
 
+## D3 — App-of-apps: one root manages many apps
+
+D2 registered a single app by hand (`kubectl apply` the Application). That doesn't
+scale. **App-of-apps** = one **root** Application whose Git source is a *folder of
+other Application manifests*. Sync the root, and ArgoCD creates every child app.
+Onboarding a new app becomes: drop one YAML in `gitops/apps/` and push.
+
+```
+gitops/
+  root-app.yaml            the root Application (path -> gitops/apps, recurse)
+  apps/
+    week5-app.yaml         child -> deploy/  (ns week5)  — the D2 app, now a child
+    hello-app.yaml         child -> hello/   (ns hello)  — a 2nd app
+hello/
+  deployment.yaml          reuses the week5-app image, APP_VERSION=hello
+  service.yaml
+```
+
+**The tree ArgoCD builds**
+```
+root ──> week5-app ──> Deployment/Service in ns week5
+    └──> hello-app ──> Deployment/Service in ns hello
+```
+
+### Adopt the D2 app + bootstrap everything
+```bash
+kubectl apply -f week5-cicd-gitops/gitops/root-app.yaml
+kubectl -n argocd get applications      # root, week5-app, hello-app all -> Synced/Healthy
+kubectl -n hello get pods                # the 2nd app the root created
+```
+The existing `week5-app` Application is **adopted** by the root (same name/spec, so
+no workload restart) — its `deploy/` manifests and running pods are untouched.
+
+### The payoff: onboard a 3rd app with one file
+Add `gitops/apps/<newapp>.yaml`, commit, push. The root auto-syncs and creates it —
+no `kubectl`. Delete that file and push: `prune` removes the app. The whole platform
+is described declaratively in Git.
+
+> Standalone D2 registration (`argocd/application.yaml`) is superseded by the child
+> `gitops/apps/week5-app.yaml`. Kept in the repo only as the D2 teaching artifact —
+> don't `kubectl apply` it anymore; the root owns week5-app now.
+
 

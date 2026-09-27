@@ -1,0 +1,23 @@
+# App-of-apps ROOT. Its Git source is a FOLDER of child Application manifests
+# (gitops/apps/). Sync this ONE Application and ArgoCD creates every child app
+# inside that folder. Onboarding a new app = drop a YAML in gitops/apps/ + push.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/nitinpwr0007/sre-devops-portfolio.git
+    targetRevision: main
+    path: week5-cicd-gitops/gitops/apps # a folder of Application CRs, not workloads
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd # the child Application objects live in the argocd namespace
+  syncPolicy:
+    automated:
+      prune: true # remove a child app if its YAML is deleted from Git
+      selfHeal: true

@@ -1,0 +1,22 @@
+# CHILD app #2. Proves the root manages MANY apps. Reuses the week5-app image
+# (already on the node, no new pull) but runs in its own namespace as a separate app.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: hello-app
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/nitinpwr0007/sre-devops-portfolio.git
+    targetRevision: main
+    path: week5-cicd-gitops/hello
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: hello
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
