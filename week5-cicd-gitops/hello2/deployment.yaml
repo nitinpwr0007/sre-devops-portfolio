@@ -1,0 +1,52 @@
+# Third workload for the onboarding demo. Same image, APP_VERSION=hello2.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello2-app
+  labels:
+    app: hello2-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hello2-app
+  template:
+    metadata:
+      labels:
+        app: hello2-app
+    spec:
+      containers:
+        - name: hello2-app
+          image: ghcr.io/nitinpwr0007/sre-devops-portfolio/week5-app:latest
+          imagePullPolicy: Always
+          env:
+            - name: APP_VERSION
+              value: hello2
+          ports:
+            - containerPort: 8080
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 10
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
