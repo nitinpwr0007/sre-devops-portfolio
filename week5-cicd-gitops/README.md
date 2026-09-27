@@ -281,5 +281,80 @@ blip. Fix: give the metric an `initialDelay` (warm-up window) and a `failureLimi
 wait for the canary to be Ready and tolerate transient noise, or you'll auto-abort
 good deploys on timing alone.
 
+## D5 — Blue-green with a pre-promotion gate
+
+Canary (D4) shifts traffic *gradually*. **Blue-green** stands up the *entire* new
+version alongside the old, then **flips 100% at once**. Two Services make it work:
+`active` (what users hit) and `preview` (points at the new version before the flip).
+A **pre-promotion analysis** probes the preview; only if it passes does `active`
+flip to the new version. If it fails, the flip never happens — the old version keeps
+serving. The safest rollback is never rolling forward.
+
+```
+bluegreen/
+  rollout.yaml             kind: Rollout, strategy.blueGreen, prePromotionAnalysis
+  services.yaml            bluegreen-active + bluegreen-preview
+  analysis-template.yaml   the gate (namespaced copy of D4's version-check)
+gitops/apps/bluegreen-app.yaml   child Application -> bluegreen/  (ns bluegreen)
+```
+
+**Canary vs blue-green**
+
+| | Canary (D4) | Blue-green (D5) |
+|---|---|---|
+| Traffic shift | Gradual 25→50→75→100 | Instant 0→100 flip |
+| Pods mid-rollout | Mostly old + few new | **Both full stacks** side-by-side |
+| Test new version pre-cutover | Only via canary weight | **Yes — dedicated `preview` Service** |
+| Cost | Low (few extra pods) | Higher (2× replicas briefly) |
+
+**The flip flow**
+```
+new version pushed
+   │
+green stands up FULL SIZE (preview)  ── blue stays active ──►  users still on blue
+   │
+prePromotionAnalysis probes preview
+   │ pass ─► active flips 0→100 to green (instant); blue scales down
+   │ fail ─► NO flip; green scaled down; blue keeps serving 100%
+```
+
+Key `blueGreen` fields:
+```yaml
+strategy:
+  blueGreen:
+    activeService: bluegreen-active     # users hit this; Rollouts flips it on promote
+    previewService: bluegreen-preview   # points at green before the flip
+    autoPromotionEnabled: true          # flip automatically once the gate passes
+    prePromotionAnalysis:               # the gate, run against preview BEFORE the flip
+      templates: [{ templateName: version-check }]
+      args: [ service-name=bluegreen-preview..., expected-version=<new> ]
+```
+(`postPromotionAnalysis` is the complement: it runs *after* the flip and, if it
+fails, auto-rolls the `active` Service back to the old version — for issues that only
+surface under real traffic.)
+
+### Demo A — good version cuts over
+Bump `APP_VERSION` and `expected-version` together (`v1 -> v2`), push. Green comes
+up as `preview` (2 pods) next to blue (still `active`). While in preview you can prove
+the isolation — port-forward each Service and see different versions at the same time:
+```bash
+kubectl -n bluegreen port-forward svc/bluegreen-active  8090:80   # v1 (blue)
+kubectl -n bluegreen port-forward svc/bluegreen-preview 8091:80   # v2 (green)
+```
+The `AnalysisRun *-pre` passes → `active` flips to green (one step) → blue scales down.
+
+### Demo B — bad version is blocked
+Set `APP_VERSION: broken` but leave the gate expecting `v2`. Green stands up in
+preview, the gate probes it, every sample mismatches → `AnalysisRun ✖ Failed` →
+`RolloutAborted`. **The flip never happens** — the tree shows revision 3 as
+`preview,delay:passed` but `ScaledDown`, while revision 2 (`v2`) stays `stable,active`
+throughout. `curl` the active Service and it still returns `v2`. Recover by reverting
+`APP_VERSION` to the good value and pushing.
+
+Same manual controls as canary apply: `kubectl argo rollouts promote / abort / retry`.
+With `autoPromotionEnabled: false` the rollout pauses in preview until you `promote`
+manually — useful when you want a human to eyeball the preview before the flip.
+
+
 
 
