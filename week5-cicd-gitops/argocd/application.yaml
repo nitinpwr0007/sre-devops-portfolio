@@ -1,0 +1,22 @@
+# The ArgoCD Application = a pointer: "watch THIS git path, keep THIS cluster
+# namespace matched to it." You apply this once; ArgoCD does the rest forever.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: week5-app
+  namespace: argocd # Application objects live in the argocd namespace
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/nitinpwr0007/sre-devops-portfolio.git
+    targetRevision: main
+    path: week5-cicd-gitops/deploy # the folder of manifests to sync
+  destination:
+    server: https://kubernetes.default.svc # the same cluster ArgoCD runs in
+    namespace: week5
+  syncPolicy:
+    automated:
+      prune: true # delete resources removed from Git
+      selfHeal: true # revert manual kubectl changes back to Git state
+    syncOptions:
+      - CreateNamespace=true # make the week5 namespace if missing

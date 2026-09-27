@@ -1,0 +1,13 @@
+# Stable in-cluster address for the pods; port 80 -> container 8080.
+apiVersion: v1
+kind: Service
+metadata:
+  name: week5-app
+  labels:
+    app: week5-app
+spec:
+  selector:
+    app: week5-app
+  ports:
+    - port: 80
+      targetPort: 8080
