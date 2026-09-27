@@ -1,0 +1,23 @@
+# Same gate as D4, deployed into the bluegreen namespace (AnalysisTemplate is
+# namespaced). Probes the preview Service and asserts the reported version matches
+# the expected one. In production this would be a prometheus: success-rate query.
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: version-check
+spec:
+  args:
+    - name: service-name
+    - name: expected-version
+  metrics:
+    - name: version-match
+      initialDelay: 45s # let green finish its startupProbe before sampling
+      count: 3
+      interval: 10s
+      failureLimit: 1
+      successCondition: result == "{{args.expected-version}}"
+      provider:
+        web:
+          url: "http://{{args.service-name}}/"
+          timeoutSeconds: 5
+          jsonPath: "{$.version}"

@@ -1,0 +1,23 @@
+# CHILD app for the blue-green demo, managed by the app-of-apps root.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: bluegreen-app
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/nitinpwr0007/sre-devops-portfolio.git
+    targetRevision: main
+    path: week5-cicd-gitops/bluegreen
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: bluegreen
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

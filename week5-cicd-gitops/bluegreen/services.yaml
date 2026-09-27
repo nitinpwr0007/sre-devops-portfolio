@@ -1,0 +1,31 @@
+# Two Services for blue-green:
+#  - bluegreen-active  : the LIVE endpoint. Rollouts points it at blue, then flips
+#                        it to green on promotion. This is what users hit.
+#  - bluegreen-preview : always points at the NEW version (green) before the flip,
+#                        so the analysis (and you) can test it in isolation.
+# Both start with selector app=bluegreen-demo; Rollouts injects the pod-hash.
+apiVersion: v1
+kind: Service
+metadata:
+  name: bluegreen-active
+  labels:
+    app: bluegreen-demo
+spec:
+  selector:
+    app: bluegreen-demo
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bluegreen-preview
+  labels:
+    app: bluegreen-demo
+spec:
+  selector:
+    app: bluegreen-demo
+  ports:
+    - port: 80
+      targetPort: 8080

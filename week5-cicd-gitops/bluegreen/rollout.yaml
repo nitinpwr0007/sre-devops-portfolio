@@ -1,0 +1,71 @@
+# Blue-green with a pre-promotion gate. Green (new version) is stood up at FULL
+# size alongside blue (current), reachable only via the preview Service. The
+# prePromotionAnalysis probes green through preview; only if it PASSES does the
+# active Service flip 100% to green. If it fails, no flip — blue keeps serving.
+# Version is changed via APP_VERSION env; image reused (IfNotPresent) so no pull.
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: bluegreen-demo
+  labels:
+    app: bluegreen-demo
+spec:
+  replicas: 2
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: bluegreen-demo
+  template:
+    metadata:
+      labels:
+        app: bluegreen-demo
+    spec:
+      containers:
+        - name: bluegreen-demo
+          image: ghcr.io/nitinpwr0007/sre-devops-portfolio/week5-app:latest
+          imagePullPolicy: IfNotPresent # image already on the node; don't re-pull
+          env:
+            - name: APP_VERSION
+              value: v1 # bump this to deploy a new "green"
+          ports:
+            - containerPort: 8080
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6 # tolerate transient timeouts on a loaded node
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+  strategy:
+    blueGreen:
+      activeService: bluegreen-active # points at the LIVE version (blue)
+      previewService: bluegreen-preview # points at the NEW version (green) pre-flip
+      autoPromotionEnabled: true # flip automatically once the gate passes
+      prePromotionAnalysis: # the gate: probe green before the cutover
+        templates:
+          - templateName: version-check
+        args:
+          - name: service-name
+            value: bluegreen-preview.bluegreen.svc.cluster.local
+          - name: expected-version
+            value: v1 # must match APP_VERSION for the flip to happen
