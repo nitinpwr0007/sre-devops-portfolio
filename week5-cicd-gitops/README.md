@@ -355,6 +355,76 @@ Same manual controls as canary apply: `kubectl argo rollouts promote / abort / r
 With `autoPromotionEnabled: false` the rollout pauses in preview until you `promote`
 manually — useful when you want a human to eyeball the preview before the flip.
 
+## D6 — GitOps secrets (sealed-secrets)
+
+GitOps says *"everything comes from Git."* Secrets break that rule: a plain k8s
+`Secret` is only **base64** (`echo <blob> | base64 -d` reverses it), so committing one
+— especially to a **public** repo — is publishing the password. Sealed-secrets fixes
+the contradiction with **asymmetric crypto**: the encrypted thing lives in Git, the
+plaintext only ever exists inside the cluster.
+
+**How it works**
+```
+plain Secret (local only, --dry-run, never committed)
+   │  kubeseal  ── encrypts with the controller's PUBLIC key ──►
+SealedSecret (opaque ciphertext — SAFE for a public repo)
+   │  git push
+Git ── ArgoCD sync ──► SealedSecret in cluster
+   │  controller decrypts with its PRIVATE key (never leaves kube-system)
+real Secret ── envFrom ──► Pod reads API_KEY
+```
+- **Controller** (`kube-system`, installed like ArgoCD/argo-rollouts, not via GitOps)
+  holds the key pair; the **private key never leaves the cluster**.
+- **`kubeseal`** (client CLI) fetches the **public** key and encrypts. Public-key
+  crypto = anyone can encrypt, only the cluster can decrypt.
+- The seal is **cryptographically bound to namespace + name** (default "strict"
+  scope) — you can't copy the SealedSecret to another namespace to unseal it.
+
+**Why sealed-secrets over external-secrets here:** external-secrets keeps the value in
+AWS Secrets Manager / Vault and puts only a *reference* in Git. Sealed-secrets needs
+no cloud account, so it fits the `$0`, no-work-AWS lab rule and stays self-contained.
+
+Key files:
+```
+secrets/sealed-secret.yaml          the ENCRYPTED SealedSecret (the only committed secret)
+gitops/apps/sealed-secret-app.yaml  child app-of-apps entry → syncs secrets/ into week5
+deploy/deployment.yaml              week5-app now has envFrom: secretRef: app-secret
+```
+
+### Seal a secret (the plaintext never hits disk)
+```bash
+kubectl create secret generic app-secret \
+  --namespace week5 --from-literal=API_KEY='...' \
+  --dry-run=client -o yaml \        # build Secret in memory only, never applied
+  | kubeseal --format yaml \        # encrypt with controller's public key
+  > secrets/sealed-secret.yaml      # commit THIS (ciphertext)
+```
+`--dry-run=client` is what keeps the plaintext out of any file — it only streams YAML
+to the pipe. `kubeseal` auto-finds the controller (`sealed-secrets-controller` in
+`kube-system`) to fetch the cert.
+
+### Demo — prove the full loop
+Commit `secrets/sealed-secret.yaml` + its child app; ArgoCD syncs, the controller
+materializes the Secret:
+```bash
+kubectl -n week5 get sealedsecret,secret app-secret
+#  sealedsecret/app-secret   (from Git, encrypted)
+#  secret/app-secret         (controller-produced, decrypted)
+kubectl -n week5 get secret app-secret -o jsonpath='{.data.API_KEY}' | base64 -d
+#  -> the original value (unsealed IN-CLUSTER only)
+kubectl -n week5 exec deploy/week5-app -- printenv API_KEY
+#  -> same value, read by a running pod via envFrom
+```
+Try to decode the ciphertext from `secrets/sealed-secret.yaml` directly and you get
+garbage — it can't be reversed without the cluster's private key. **That** is why it's
+safe to commit.
+
+**Gotcha — rotation / cluster rebuild:** the private key lives only in the cluster. If
+you recreate the kind cluster you get a *new* key, and old SealedSecrets can no longer
+be decrypted — re-seal them. In real setups you back up the controller's sealing key
+(`kubectl -n kube-system get secret -l sealedsecrets.bitnami.com/sealed-secrets-key -o yaml`)
+so a restored cluster can still unseal existing SealedSecrets.
+
 
 
 
