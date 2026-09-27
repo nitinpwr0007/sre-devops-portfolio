@@ -182,4 +182,104 @@ metadata:
     - resources-finalizer.argocd.argoproj.io
 ```
 
+## D4 — Argo Rollouts: metric-gated canary (progressive delivery)
+
+A plain Deployment does all-or-nothing rollouts. **Argo Rollouts** replaces it with
+a `Rollout` that shifts traffic to a new version in **steps**, and — the key part —
+runs an **analysis** between steps that decides *automatically* whether to keep
+going (**auto-promote**) or roll back (**auto-abort**). This is *metric-gated
+promotion*: a new version must prove itself against data before it earns more
+traffic.
+
+```
+rollout/
+  rollout.yaml             kind: Rollout, canary strategy, version via APP_VERSION env
+  service.yaml             rollout-demo + rollout-demo-canary + rollout-demo-stable
+  analysis-template.yaml   the gate: probe the canary, pass/fail on a successCondition
+gitops/apps/rollout-app.yaml   child Application -> rollout/  (ns rollout, finalizer)
+```
+
+**The canary flow**
+```
+new version pushed
+   │
+setWeight 25 ─► [analysis: probe canary x3]
+                     │ pass ─► setWeight 50 ─► 75 ─► 100  (canary becomes stable)
+                     │ fail ─► ABORT: canary -> 0, stable keeps 100%
+```
+
+### Why a canary/stable Service split
+So the gate judges the **new** version only. The Rollout is given `canaryService`
+and `stableService`; Argo Rollouts injects the pod-template-hash into their
+selectors, so `rollout-demo-canary` resolves to canary pods **only**. The analysis
+probes that service — never the old stable pods.
+
+### The analysis gate
+`AnalysisTemplate` defines the check. Here the built-in **web** provider GETs the
+canary and asserts the reported `version` matches the expected one — a deterministic
+stand-in for a real metric. In production this block is `prometheus:` querying a
+success-rate/latency query instead; the pass/fail mechanics are identical.
+```yaml
+metrics:
+  - name: version-match
+    initialDelay: 45s      # let the canary finish startup before sampling
+    count: 3               # sample 3 times...
+    interval: 10s          # ...10s apart (a metric window)
+    failureLimit: 1        # tolerate 1 blip; 2+ bad samples -> abort
+    successCondition: result == "{{args.expected-version}}"
+    provider:
+      web: { url: "http://{{args.service-name}}/", jsonPath: "{$.version}" }
+```
+
+### Setup (one time)
+```bash
+kubectl create namespace argo-rollouts
+kubectl apply -n argo-rollouts --server-side --force-conflicts \
+  -f https://github.com/argoproj/argo-rollouts/releases/latest/download/install.yaml
+kubectl -n argo-rollouts rollout status deploy/argo-rollouts
+brew install argoproj/tap/kubectl-argo-rollouts    # the CLI plugin
+```
+
+### Demo A — good version auto-promotes
+Bump `APP_VERSION` (e.g. `v2 -> v3`), commit, push, refresh the app. Watch:
+```bash
+kubectl argo rollouts get rollout rollout-demo -n rollout --watch
+```
+Canary comes up at 25%, the `AnalysisRun` waits 45s, samples 3× → `✔ Successful`
+→ rollout **auto-promotes** through 50/75/100. No manual `promote`.
+
+### Demo B — bad version auto-aborts
+Set `APP_VERSION: broken` while the gate still expects the good version. The canary
+honestly reports `broken`, every sample mismatches → `AnalysisRun ✖ Failed` →
+`RolloutAborted`. Canary scales to 0; **stable keeps 100% the entire time**. The bad
+release never gets past one pod, then is pulled. Recover by reverting `APP_VERSION`
+to the good value and pushing.
+
+Manual controls (when there's no gate, or to override one):
+`kubectl argo rollouts promote <ro>` (advance one step), `promote --full` (skip to
+100%), `abort <ro>` (roll back), `retry <ro>` (re-attempt an aborted rollout).
+
+### Gotcha 1: node can't pull the controller image (corporate TLS proxy)
+`argo-rollouts` controller stuck `ImagePullBackOff` with `x509: certificate signed
+by unknown authority` pulling `quay.io`. The kind node's containerd doesn't trust
+the corporate CA. Fix = pull on the host (which does trust it) and side-load into
+the node so it never pulls:
+```bash
+docker pull --platform linux/arm64 quay.io/argoproj/argo-rollouts:v1.10.0
+docker save  --platform linux/arm64 quay.io/argoproj/argo-rollouts:v1.10.0 -o /tmp/argo-rollouts.tar
+kind load image-archive /tmp/argo-rollouts.tar --name week5
+kubectl -n argo-rollouts delete pod -l app.kubernetes.io/name=argo-rollouts
+```
+
+### Gotcha 2: analysis started before the canary was Ready → false abort
+First auto-promote attempt aborted a **good** version. Cause: the analysis ran
+immediately after `setWeight: 25`, but the new pod needed ~45s to pass its
+`startupProbe`. The web probe hit a Service with **no ready endpoints →
+connection refused → failed sample**, and `failureLimit: 0` aborted on that single
+blip. Fix: give the metric an `initialDelay` (warm-up window) and a `failureLimit`
+> 0 so a startup blip doesn't nuke a healthy release. Lesson: an analysis gate must
+wait for the canary to be Ready and tolerate transient noise, or you'll auto-abort
+good deploys on timing alone.
+
+
 
