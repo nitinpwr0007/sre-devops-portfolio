@@ -22,6 +22,12 @@ spec:
           imagePullPolicy: Always # :latest is mutable, so always re-pull
           ports:
             - containerPort: 8080
+          # Inject every key of the decrypted Secret as an env var (API_KEY).
+          # The Secret is produced in-cluster by the sealed-secrets controller
+          # from the SealedSecret in Git — the app never sees the ciphertext.
+          envFrom:
+            - secretRef:
+                name: app-secret
           # Guards the boot window: liveness/readiness stay disabled until this
           # first succeeds, so a slow start can never trigger a restart.
           startupProbe:
