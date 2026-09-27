@@ -171,4 +171,15 @@ is described declaratively in Git.
 > `gitops/apps/week5-app.yaml`. Kept in the repo only as the D2 teaching artifact —
 > don't `kubectl apply` it anymore; the root owns week5-app now.
 
+### Gotcha: prune orphans the workload without a finalizer
+Deleting a child app's YAML pruned the child **Application** but left its **pods
+running** — deleting an ArgoCD Application does NOT cascade-delete its resources by
+default. Fix: add the cascade finalizer to every child Application so prune tears
+down the whole app:
+```yaml
+metadata:
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+```
+
 
