@@ -1,0 +1,66 @@
+# A Rollout is a drop-in replacement for a Deployment that adds progressive
+# delivery. This one uses a CANARY strategy: shift to the new version in steps,
+# pausing between them. We change versions via the APP_VERSION env (no new image),
+# and reuse the cached week5-app image so canary pods start with no registry pull.
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: rollout-demo
+  labels:
+    app: rollout-demo
+spec:
+  replicas: 4
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: rollout-demo
+  template:
+    metadata:
+      labels:
+        app: rollout-demo
+    spec:
+      containers:
+        - name: rollout-demo
+          image: ghcr.io/nitinpwr0007/sre-devops-portfolio/week5-app:latest
+          imagePullPolicy: IfNotPresent # image is already on the node; don't re-pull
+          env:
+            - name: APP_VERSION
+              value: v1 # bump this to trigger a canary rollout
+          ports:
+            - containerPort: 8080
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 10
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+  strategy:
+    canary:
+      steps:
+        - setWeight: 25
+        - pause: {} # indefinite — hold here until you promote (the manual gate)
+        - setWeight: 50
+        - pause: { duration: 20s }
+        - setWeight: 75
+        - pause: { duration: 20s }
+        # after the last step the canary becomes 100% stable automatically

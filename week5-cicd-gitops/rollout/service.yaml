@@ -1,0 +1,15 @@
+# Single Service for the basic canary. Without a service mesh/ingress traffic
+# router, Argo Rollouts approximates the canary weight by the ratio of canary vs
+# stable pods behind this one Service.
+apiVersion: v1
+kind: Service
+metadata:
+  name: rollout-demo
+  labels:
+    app: rollout-demo
+spec:
+  selector:
+    app: rollout-demo
+  ports:
+    - port: 80
+      targetPort: 8080
