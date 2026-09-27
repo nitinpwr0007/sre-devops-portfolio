@@ -25,7 +25,7 @@ spec:
           imagePullPolicy: IfNotPresent # image is already on the node; don't re-pull
           env:
             - name: APP_VERSION
-              value: broken # DEMO B: bad version; gate still expects v3 -> auto-abort
+              value: v3 # recovered to last known-good after the abort demo
           ports:
             - containerPort: 8080
           startupProbe:
