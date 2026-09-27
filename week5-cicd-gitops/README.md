@@ -103,4 +103,30 @@ kubectl -n argocd port-forward svc/argocd-server 8081:443
 kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d ; echo
 ```
 
+### Gotchas hit (and fixed) during D2
+
+**1. kube-proxy CrashLoop → whole cluster networking broken (kind on colima).**
+After installing ArgoCD many pods failed with `dial tcp 10.96.0.1:443: i/o timeout`
+and `CreateContainerConfigError`. Red herring: looked like NetworkPolicy. Real
+cause found in `kubectl -n kube-system logs kube-proxy-xxx`:
+`fsnotify watcher init: too many open files` — the colima VM's inotify limits were
+exhausted, killing kube-proxy, which broke ClusterIP routing (API + DNS) for
+everything. Fix (runtime; not persistent across colima restarts):
+```bash
+colima ssh -- sudo sysctl -w fs.inotify.max_user_instances=8192
+colima ssh -- sudo sysctl -w fs.inotify.max_user_watches=524288
+kubectl -n kube-system delete pod -l k8s-app=kube-proxy
+```
+Lesson: `dial 10.96.0.1 i/o timeout` from many pods ⇒ suspect kube-proxy first,
+check `kube-system` before app-level configs.
+
+**2. New pod crash-looped on a busy node — liveness killed it during startup.**
+When the 2nd replica landed on an already-loaded node, gunicorn booted too slowly
+to answer `/healthz` within the liveness probe's default 1s timeout →
+`connection refused` / `context deadline exceeded` → Kubernetes killed it (4
+restarts). App logs showed `Handling signal: term` = killed, not crashed. Fix: add
+a **startupProbe** (freezes liveness/readiness until boot completes) and raise
+`timeoutSeconds` to 3. Lesson: never let a liveness probe run during startup — use
+a startupProbe for slow-booting apps, not a bigger `initialDelaySeconds`.
+
 
