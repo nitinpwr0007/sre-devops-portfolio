@@ -22,18 +22,27 @@ spec:
           imagePullPolicy: Always # :latest is mutable, so always re-pull
           ports:
             - containerPort: 8080
+          # Guards the boot window: liveness/readiness stay disabled until this
+          # first succeeds, so a slow start can never trigger a restart.
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12 # up to ~60s to boot before giving up
           readinessProbe:
             httpGet:
               path: /healthz
               port: 8080
-            initialDelaySeconds: 3
             periodSeconds: 5
+            timeoutSeconds: 3
           livenessProbe:
             httpGet:
               path: /healthz
               port: 8080
-            initialDelaySeconds: 5
             periodSeconds: 10
+            timeoutSeconds: 3
           resources:
             requests:
               cpu: 50m
