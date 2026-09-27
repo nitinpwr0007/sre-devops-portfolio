@@ -25,7 +25,7 @@ spec:
           imagePullPolicy: IfNotPresent # image is already on the node; don't re-pull
           env:
             - name: APP_VERSION
-              value: v1 # bump this to trigger a canary rollout
+              value: v2 # bump this to trigger a canary rollout
           ports:
             - containerPort: 8080
           startupProbe:
